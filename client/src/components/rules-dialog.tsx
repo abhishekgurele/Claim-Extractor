@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Scale, Plus, Trash2, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -57,6 +57,31 @@ function ConditionBuilder({
   onChange: (condition: RuleCondition) => void;
   onRemove: () => void;
 }) {
+  const [localValue, setLocalValue] = useState(condition.value);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    setLocalValue(condition.value);
+  }, [condition.value]);
+
+  const handleValueChange = useCallback((newValue: string) => {
+    setLocalValue(newValue);
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    debounceRef.current = setTimeout(() => {
+      onChange({ ...condition, value: newValue });
+    }, 500);
+  }, [onChange, condition]);
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, []);
+
   return (
     <div className="flex items-center gap-2 p-2 rounded-md bg-muted/30" data-testid={`condition-${index}`}>
       <Select
@@ -93,8 +118,8 @@ function ConditionBuilder({
       
       <Input
         placeholder="Value"
-        value={condition.value}
-        onChange={(e) => onChange({ ...condition, value: e.target.value })}
+        value={localValue}
+        onChange={(e) => handleValueChange(e.target.value)}
         className="flex-1"
         data-testid={`input-condition-value-${index}`}
       />
