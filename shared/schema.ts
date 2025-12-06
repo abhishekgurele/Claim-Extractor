@@ -165,3 +165,76 @@ export type User = {
   username: string;
   password: string;
 };
+
+// Required document types for claim submission
+export const requiredDocumentTypes = [
+  "identityCard",
+  "dischargeSummary",
+  "bills",
+  "investigations",
+] as const;
+export type RequiredDocumentType = typeof requiredDocumentTypes[number];
+
+export const documentTypeLabels: Record<RequiredDocumentType, string> = {
+  identityCard: "Identity Card",
+  dischargeSummary: "Discharge Summary",
+  bills: "Bills",
+  investigations: "Investigations",
+};
+
+// Patient information schema
+export const patientInfoSchema = z.object({
+  name: z.string().min(1, "Patient name is required"),
+  email: z.string().email("Valid email is required"),
+  phone: z.string().min(10, "Valid phone number is required"),
+});
+export type PatientInfo = z.infer<typeof patientInfoSchema>;
+
+// Document checklist item
+export const documentChecklistItemSchema = z.object({
+  type: z.enum(requiredDocumentTypes),
+  uploaded: z.boolean().default(false),
+  filename: z.string().optional(),
+  fileData: z.string().optional(),
+  fileType: z.string().optional(),
+  fileSize: z.number().optional(),
+});
+export type DocumentChecklistItem = z.infer<typeof documentChecklistItemSchema>;
+
+// Claim submission with patient info and documents
+export const claimSubmissionSchema = z.object({
+  id: z.string(),
+  patientInfo: patientInfoSchema,
+  documentChecklist: z.array(documentChecklistItemSchema),
+  isComplete: z.boolean().default(false),
+  missingDocuments: z.array(z.enum(requiredDocumentTypes)).default([]),
+  createdAt: z.string(),
+  status: z.enum(["draft", "pending_documents", "ready", "processing", "completed", "notified"]),
+  providerEmail: z.string().email().optional(),
+  notificationSentAt: z.string().optional(),
+  extractedData: z.record(z.string(), z.any()).optional(),
+});
+export type ClaimSubmission = z.infer<typeof claimSubmissionSchema>;
+
+export const insertClaimSubmissionSchema = claimSubmissionSchema.omit({ id: true, createdAt: true });
+export type InsertClaimSubmission = z.infer<typeof insertClaimSubmissionSchema>;
+
+// Request schema for creating a submission
+export const createSubmissionRequestSchema = z.object({
+  patientInfo: patientInfoSchema,
+  providerEmail: z.string().email("Provider email is required"),
+});
+export type CreateSubmissionRequest = z.infer<typeof createSubmissionRequestSchema>;
+
+// Request schema for uploading a document to a submission
+export const uploadDocumentRequestSchema = z.object({
+  submissionId: z.string(),
+  documentType: z.enum(requiredDocumentTypes),
+});
+export type UploadDocumentRequest = z.infer<typeof uploadDocumentRequestSchema>;
+
+// Email notification request
+export const notifyProviderRequestSchema = z.object({
+  submissionId: z.string(),
+});
+export type NotifyProviderRequest = z.infer<typeof notifyProviderRequestSchema>;
