@@ -4,9 +4,10 @@ import multer from "multer";
 import { extractFieldsFromDocument, bufferToBase64 } from "./gemini";
 import { storage } from "./storage";
 import { evaluateClaim } from "./rules-engine";
-import { insertRuleSchema, ruleConditionSchema, extractedFieldSchema } from "@shared/schema";
+import { sendMissingDocumentsEmail } from "./email";
+import { insertRuleSchema, ruleConditionSchema, extractedFieldSchema, createSubmissionRequestSchema, requiredDocumentTypes } from "@shared/schema";
 import { z } from "zod";
-import type { Document, ProcessDocumentResponse, InsertFieldDefinition } from "@shared/schema";
+import type { Document, ProcessDocumentResponse, InsertFieldDefinition, RequiredDocumentType } from "@shared/schema";
 
 const updateRuleSchema = z.object({
   name: z.string().optional(),
@@ -249,6 +250,158 @@ export async function registerRoutes(
       res.json(verdict);
     } catch (error) {
       res.status(500).json({ error: "Failed to evaluate rules" });
+    }
+  });
+
+  app.post("/api/submissions", async (req: Request, res: Response) => {
+    try {
+      const parsed = createSubmissionRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0]?.message || "Invalid submission data" });
+      }
+      const submission = await storage.createSubmission(parsed.data.patientInfo, parsed.data.providerEmail);
+      res.json(submission);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create submission" });
+    }
+  });
+
+  app.get("/api/submissions/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const submission = await storage.getSubmission(id);
+      if (!submission) {
+        return res.status(404).json({ error: "Submission not found" });
+      }
+      res.json(submission);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch submission" });
+    }
+  });
+
+  app.post(
+    "/api/submissions/:id/documents",
+    upload.single("file"),
+    async (req: Request, res: Response) => {
+      try {
+        const { id } = req.params;
+        const documentType = req.body.documentType as RequiredDocumentType;
+        const file = req.file;
+
+        if (!file) {
+          return res.status(400).json({ error: "No file provided" });
+        }
+
+        if (!documentType || !requiredDocumentTypes.includes(documentType)) {
+          return res.status(400).json({ error: "Invalid document type" });
+        }
+
+        const submission = await storage.getSubmission(id);
+        if (!submission) {
+          return res.status(404).json({ error: "Submission not found" });
+        }
+
+        const base64Data = bufferToBase64(file.buffer);
+        const updated = await storage.updateSubmissionDocument(id, documentType, {
+          uploaded: true,
+          filename: file.originalname,
+          fileData: base64Data,
+          fileType: file.mimetype,
+          fileSize: file.size,
+        });
+
+        res.json(updated);
+      } catch (error) {
+        res.status(500).json({ error: "Failed to upload document" });
+      }
+    }
+  );
+
+  app.post("/api/submissions/:id/process", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const submission = await storage.getSubmission(id);
+
+      if (!submission) {
+        return res.status(404).json({ error: "Submission not found" });
+      }
+
+      if (!submission.isComplete) {
+        return res.status(400).json({
+          error: "Cannot process submission - missing documents",
+          missingDocuments: submission.missingDocuments,
+        });
+      }
+
+      if (!process.env.GEMINI_API_KEY) {
+        return res.status(500).json({ error: "Gemini API key not configured" });
+      }
+
+      await storage.updateSubmissionStatus(id, "processing");
+
+      const enabledFields = await storage.getEnabledFieldDefinitions();
+      const allExtractedFields: Record<string, any> = {};
+
+      for (const doc of submission.documentChecklist) {
+        if (doc.uploaded && doc.fileData && doc.fileType) {
+          const result = await extractFieldsFromDocument(doc.fileData, doc.fileType, enabledFields);
+          if (result.fields) {
+            result.fields.forEach(field => {
+              allExtractedFields[field.label] = {
+                value: field.value,
+                confidence: field.confidence,
+                source: doc.type,
+              };
+            });
+          }
+        }
+      }
+
+      const updated = await storage.setSubmissionExtractedData(id, allExtractedFields);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to process submission" });
+    }
+  });
+
+  app.post("/api/submissions/:id/notify", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const submission = await storage.getSubmission(id);
+
+      if (!submission) {
+        return res.status(404).json({ error: "Submission not found" });
+      }
+
+      if (submission.isComplete) {
+        return res.status(400).json({ error: "All documents already uploaded" });
+      }
+
+      if (!submission.providerEmail) {
+        return res.status(400).json({ error: "No provider email configured" });
+      }
+
+      if (submission.notificationSentAt) {
+        return res.status(400).json({ error: "Notification already sent", sentAt: submission.notificationSentAt });
+      }
+
+      const result = await sendMissingDocumentsEmail({
+        providerEmail: submission.providerEmail,
+        patientName: submission.patientInfo.name,
+        patientEmail: submission.patientInfo.email,
+        patientPhone: submission.patientInfo.phone,
+        missingDocuments: submission.missingDocuments,
+        submissionId: id,
+      });
+
+      if (!result.success) {
+        return res.status(500).json({ error: result.error || "Failed to send email" });
+      }
+
+      const updated = await storage.setSubmissionNotified(id);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to send notification" });
     }
   });
 

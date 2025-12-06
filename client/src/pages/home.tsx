@@ -10,11 +10,12 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { RulesDialog } from "@/components/rules-dialog";
 import { VerdictBanner } from "@/components/verdict-banner";
+import { SubmissionIntakeForm } from "@/components/submission-intake-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { Document, ExtractedField, ExportData, ProcessingStatus, ClaimVerdict, Rule } from "@shared/schema";
+import type { Document, ExtractedField, ExportData, ProcessingStatus, ClaimVerdict, Rule, ClaimSubmission } from "@shared/schema";
 
 export default function Home() {
   const [document, setDocument] = useState<Document | null>(null);
@@ -22,6 +23,7 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const [verdict, setVerdict] = useState<ClaimVerdict | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [completedSubmission, setCompletedSubmission] = useState<ClaimSubmission | null>(null);
   const { toast } = useToast();
 
   const { data: rules = [] } = useQuery<Rule[]>({
@@ -173,7 +175,41 @@ export default function Home() {
     setStatus("idle");
     setProgress(0);
     setVerdict(null);
+    setCompletedSubmission(null);
   }, []);
+
+  const handleSubmissionComplete = useCallback((submission: ClaimSubmission) => {
+    setCompletedSubmission(submission);
+    setStatus("completed");
+    setProgress(100);
+    
+    if (submission.extractedData) {
+      const fields: ExtractedField[] = Object.entries(submission.extractedData).map(([label, data]: [string, any], index) => ({
+        id: `field-${index}`,
+        label,
+        value: data.value || "",
+        confidence: data.confidence || "medium",
+        isEdited: false,
+      }));
+      
+      const doc: Document = {
+        id: submission.id,
+        filename: `Submission-${submission.id}`,
+        fileType: "application/json",
+        fileSize: 0,
+        uploadedAt: submission.createdAt,
+        status: "completed",
+        extractedFields: fields,
+      };
+      
+      setDocument(doc);
+    }
+    
+    toast({
+      title: "Claim Processed",
+      description: "All documents have been analyzed and data extracted.",
+    });
+  }, [toast]);
 
   const generateExportData = useCallback((): ExportData | null => {
     if (!document?.extractedFields) return null;
@@ -271,9 +307,7 @@ export default function Home() {
         {/* Content Area */}
         {status === "idle" ? (
           <div className="flex items-center justify-center py-12">
-            <div className="w-full max-w-2xl">
-              <UploadZone onFileSelect={handleFileSelect} isProcessing={false} />
-            </div>
+            <SubmissionIntakeForm onSubmissionComplete={handleSubmissionComplete} />
           </div>
         ) : showReview ? (
           <div className="space-y-6">
