@@ -62,7 +62,8 @@ export async function registerRoutes(
         );
 
         if (extractionResult.error) {
-          return res.status(500).json({
+          const isConfigError = extractionResult.error.includes("No extraction fields are enabled");
+          return res.status(isConfigError ? 400 : 500).json({
             success: false,
             error: extractionResult.error,
           } as ProcessDocumentResponse);
