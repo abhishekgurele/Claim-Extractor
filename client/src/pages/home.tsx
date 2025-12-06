@@ -7,6 +7,7 @@ import { ReviewGrid } from "@/components/review-grid";
 import { DocumentPreview } from "@/components/document-preview";
 import { ExportDialog } from "@/components/export-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SettingsDialog } from "@/components/settings-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
@@ -179,7 +180,7 @@ export default function Home() {
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
             {showReview && (
               <>
                 <Button
@@ -196,6 +197,7 @@ export default function Home() {
                 />
               </>
             )}
+            <SettingsDialog />
             <ThemeToggle />
           </div>
         </div>

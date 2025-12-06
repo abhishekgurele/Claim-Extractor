@@ -63,27 +63,38 @@ export const exportDataSchema = z.object({
 
 export type ExportData = z.infer<typeof exportDataSchema>;
 
-// Claims-specific field types that Gemini will extract
-export const claimFieldTypes = [
-  "policyNumber",
-  "claimNumber",
-  "claimDate",
-  "claimAmount",
-  "claimantName",
-  "claimantAddress",
-  "claimantPhone",
-  "claimantEmail",
-  "incidentDate",
-  "incidentDescription",
-  "incidentLocation",
-  "vehicleInfo",
-  "diagnosisCode",
-  "treatmentDate",
-  "providerName",
-  "providerNPI",
-] as const;
+// Custom field definition for extraction
+export const fieldDefinitionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  enabled: z.boolean().default(true),
+});
 
-export type ClaimFieldType = typeof claimFieldTypes[number];
+export type FieldDefinition = z.infer<typeof fieldDefinitionSchema>;
+
+export const insertFieldDefinitionSchema = fieldDefinitionSchema.omit({ id: true });
+export type InsertFieldDefinition = z.infer<typeof insertFieldDefinitionSchema>;
+
+// Default field definitions
+export const defaultFieldDefinitions: FieldDefinition[] = [
+  { id: "1", name: "policyNumber", description: "The insurance policy number", enabled: true },
+  { id: "2", name: "claimNumber", description: "The claim reference number", enabled: true },
+  { id: "3", name: "claimDate", description: "The date the claim was filed", enabled: true },
+  { id: "4", name: "claimAmount", description: "The monetary amount being claimed", enabled: true },
+  { id: "5", name: "claimantName", description: "The name of the person filing the claim", enabled: true },
+  { id: "6", name: "claimantAddress", description: "The claimant's address", enabled: true },
+  { id: "7", name: "claimantPhone", description: "The claimant's phone number", enabled: true },
+  { id: "8", name: "claimantEmail", description: "The claimant's email address", enabled: true },
+  { id: "9", name: "incidentDate", description: "The date of the incident", enabled: true },
+  { id: "10", name: "incidentDescription", description: "Brief description of what happened", enabled: true },
+  { id: "11", name: "incidentLocation", description: "Where the incident occurred", enabled: true },
+  { id: "12", name: "vehicleInfo", description: "Vehicle details (make, model, VIN) if applicable", enabled: true },
+  { id: "13", name: "diagnosisCode", description: "Medical diagnosis codes if applicable", enabled: true },
+  { id: "14", name: "treatmentDate", description: "Date of medical treatment if applicable", enabled: true },
+  { id: "15", name: "providerName", description: "Healthcare or service provider name", enabled: true },
+  { id: "16", name: "providerNPI", description: "Provider NPI number if applicable", enabled: true },
+];
 
 // User schema (keeping from template)
 export const insertUserSchema = z.object({

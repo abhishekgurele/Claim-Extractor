@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import type { ExtractedField, ConfidenceLevel } from "@shared/schema";
+import type { ExtractedField, ConfidenceLevel, FieldDefinition } from "@shared/schema";
 
 // DON'T DELETE THIS COMMENT
 // Follow these instructions when using this blueprint:
@@ -8,8 +8,13 @@ import type { ExtractedField, ConfidenceLevel } from "@shared/schema";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
-// Prompt for extracting claims data from documents
-const EXTRACTION_PROMPT = `You are an expert document analyzer specializing in insurance claims processing. 
+// Build dynamic extraction prompt based on custom field definitions
+function buildExtractionPrompt(fields: FieldDefinition[]): string {
+  const fieldList = fields
+    .map(f => `- ${f.name}: ${f.description}`)
+    .join("\n");
+
+  return `You are an expert document analyzer specializing in insurance claims processing. 
 Analyze the uploaded document (which may be a PDF or image) and extract all relevant claims-related information.
 
 For each field you extract, provide:
@@ -17,23 +22,8 @@ For each field you extract, provide:
 2. The extracted value
 3. Your confidence level: "high", "medium", or "low"
 
-Focus on extracting these common claims fields if present:
-- policyNumber: The insurance policy number
-- claimNumber: The claim reference number
-- claimDate: The date the claim was filed
-- claimAmount: The monetary amount being claimed
-- claimantName: The name of the person filing the claim
-- claimantAddress: The claimant's address
-- claimantPhone: The claimant's phone number
-- claimantEmail: The claimant's email address
-- incidentDate: The date of the incident
-- incidentDescription: Brief description of what happened
-- incidentLocation: Where the incident occurred
-- vehicleInfo: Vehicle details (make, model, VIN) if applicable
-- diagnosisCode: Medical diagnosis codes if applicable
-- treatmentDate: Date of medical treatment if applicable
-- providerName: Healthcare or service provider name
-- providerNPI: Provider NPI number if applicable
+Focus on extracting these fields if present in the document:
+${fieldList}
 
 Only include fields that are actually present in the document. Do not invent data.
 
@@ -44,6 +34,7 @@ Respond with a JSON array of objects in this exact format:
 ]
 
 If you cannot extract any useful information from the document, respond with an empty array: []`;
+}
 
 export interface GeminiExtractionResult {
   fields: ExtractedField[];
@@ -52,9 +43,21 @@ export interface GeminiExtractionResult {
 
 export async function extractFieldsFromDocument(
   base64Data: string,
-  mimeType: string
+  mimeType: string,
+  customFields?: FieldDefinition[]
 ): Promise<GeminiExtractionResult> {
   try {
+    // If no fields are enabled, return error
+    if (!customFields || customFields.length === 0) {
+      return {
+        fields: [],
+        error: "No extraction fields are enabled. Please enable at least one field in Settings.",
+      };
+    }
+
+    // Build prompt based on custom fields
+    const prompt = buildExtractionPrompt(customFields);
+
     // Construct the request with proper Gemini SDK format
     const contents = [
       {
@@ -67,7 +70,7 @@ export async function extractFieldsFromDocument(
             },
           },
           {
-            text: EXTRACTION_PROMPT,
+            text: prompt,
           },
         ],
       },

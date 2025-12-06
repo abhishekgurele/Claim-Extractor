@@ -2,7 +2,8 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import multer from "multer";
 import { extractFieldsFromDocument, bufferToBase64 } from "./gemini";
-import type { Document, ProcessDocumentResponse } from "@shared/schema";
+import { storage } from "./storage";
+import type { Document, ProcessDocumentResponse, InsertFieldDefinition } from "@shared/schema";
 
 // Configure multer for memory storage
 const upload = multer({
@@ -50,10 +51,14 @@ export async function registerRoutes(
         // Convert file to base64
         const base64Data = bufferToBase64(file.buffer);
 
-        // Extract fields using Gemini
+        // Get enabled custom field definitions
+        const enabledFields = await storage.getEnabledFieldDefinitions();
+
+        // Extract fields using Gemini with custom field definitions
         const extractionResult = await extractFieldsFromDocument(
           base64Data,
-          file.mimetype
+          file.mimetype,
+          enabledFields
         );
 
         if (extractionResult.error) {
@@ -98,6 +103,69 @@ export async function registerRoutes(
       status: "ok",
       hasApiKey: !!process.env.GEMINI_API_KEY,
     });
+  });
+
+  // Field definitions endpoints
+  app.get("/api/fields", async (_req: Request, res: Response) => {
+    try {
+      const fields = await storage.getFieldDefinitions();
+      res.json(fields);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch field definitions" });
+    }
+  });
+
+  app.post("/api/fields", async (req: Request, res: Response) => {
+    try {
+      const { name, description, enabled } = req.body;
+      if (!name || !description) {
+        return res.status(400).json({ error: "Name and description are required" });
+      }
+      const field = await storage.createFieldDefinition({
+        name,
+        description,
+        enabled: enabled ?? true,
+      } as InsertFieldDefinition);
+      res.json(field);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create field definition" });
+    }
+  });
+
+  app.patch("/api/fields/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const field = await storage.updateFieldDefinition(id, updates);
+      if (!field) {
+        return res.status(404).json({ error: "Field not found" });
+      }
+      res.json(field);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update field definition" });
+    }
+  });
+
+  app.delete("/api/fields/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteFieldDefinition(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Field not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete field definition" });
+    }
+  });
+
+  app.post("/api/fields/reset", async (_req: Request, res: Response) => {
+    try {
+      const fields = await storage.resetFieldDefinitions();
+      res.json(fields);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reset field definitions" });
+    }
   });
 
   return httpServer;
