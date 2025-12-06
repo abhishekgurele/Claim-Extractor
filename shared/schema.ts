@@ -96,6 +96,62 @@ export const defaultFieldDefinitions: FieldDefinition[] = [
   { id: "16", name: "providerNPI", description: "Provider NPI number if applicable", enabled: true },
 ];
 
+// Rule engine schemas
+export const ruleOperators = [
+  "greaterThan",
+  "lessThan",
+  "equals",
+  "notEquals",
+  "contains",
+  "notContains",
+  "greaterThanOrEqual",
+  "lessThanOrEqual",
+] as const;
+export type RuleOperator = typeof ruleOperators[number];
+
+export const ruleConditionSchema = z.object({
+  field: z.string(),
+  operator: z.enum(ruleOperators),
+  value: z.string(),
+});
+export type RuleCondition = z.infer<typeof ruleConditionSchema>;
+
+export const ruleSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  conditions: z.array(ruleConditionSchema),
+  logic: z.enum(["all", "any"]),
+  action: z.enum(["fail", "pass"]),
+  enabled: z.boolean().default(true),
+});
+export type Rule = z.infer<typeof ruleSchema>;
+
+export const insertRuleSchema = ruleSchema.omit({ id: true });
+export type InsertRule = z.infer<typeof insertRuleSchema>;
+
+export const ruleEvaluationResultSchema = z.object({
+  ruleId: z.string(),
+  ruleName: z.string(),
+  passed: z.boolean(),
+  triggeredConditions: z.array(z.object({
+    field: z.string(),
+    operator: z.string(),
+    expectedValue: z.string(),
+    actualValue: z.string(),
+    matched: z.boolean(),
+  })),
+});
+export type RuleEvaluationResult = z.infer<typeof ruleEvaluationResultSchema>;
+
+export const claimVerdictSchema = z.object({
+  verdict: z.enum(["pass", "fail", "pending"]),
+  evaluatedRules: z.array(ruleEvaluationResultSchema),
+  failedRules: z.array(z.string()),
+  passedRules: z.array(z.string()),
+});
+export type ClaimVerdict = z.infer<typeof claimVerdictSchema>;
+
 // User schema (keeping from template)
 export const insertUserSchema = z.object({
   username: z.string(),

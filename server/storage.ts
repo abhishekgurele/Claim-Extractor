@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type FieldDefinition, type InsertFieldDefinition, defaultFieldDefinitions } from "@shared/schema";
+import { type User, type InsertUser, type FieldDefinition, type InsertFieldDefinition, type Rule, type InsertRule, defaultFieldDefinitions } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -11,15 +11,23 @@ export interface IStorage {
   updateFieldDefinition(id: string, updates: Partial<FieldDefinition>): Promise<FieldDefinition | undefined>;
   deleteFieldDefinition(id: string): Promise<boolean>;
   resetFieldDefinitions(): Promise<FieldDefinition[]>;
+  getRules(): Promise<Rule[]>;
+  getEnabledRules(): Promise<Rule[]>;
+  getRule(id: string): Promise<Rule | undefined>;
+  createRule(rule: InsertRule): Promise<Rule>;
+  updateRule(id: string, updates: Partial<Rule>): Promise<Rule | undefined>;
+  deleteRule(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private fieldDefinitions: Map<string, FieldDefinition>;
+  private rules: Map<string, Rule>;
 
   constructor() {
     this.users = new Map();
     this.fieldDefinitions = new Map();
+    this.rules = new Map();
     defaultFieldDefinitions.forEach(field => {
       this.fieldDefinitions.set(field.id, field);
     });
@@ -75,6 +83,37 @@ export class MemStorage implements IStorage {
       this.fieldDefinitions.set(field.id, field);
     });
     return Array.from(this.fieldDefinitions.values());
+  }
+
+  async getRules(): Promise<Rule[]> {
+    return Array.from(this.rules.values());
+  }
+
+  async getEnabledRules(): Promise<Rule[]> {
+    return Array.from(this.rules.values()).filter(r => r.enabled);
+  }
+
+  async getRule(id: string): Promise<Rule | undefined> {
+    return this.rules.get(id);
+  }
+
+  async createRule(rule: InsertRule): Promise<Rule> {
+    const id = randomUUID();
+    const newRule: Rule = { ...rule, id };
+    this.rules.set(id, newRule);
+    return newRule;
+  }
+
+  async updateRule(id: string, updates: Partial<Rule>): Promise<Rule | undefined> {
+    const existing = this.rules.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...updates, id };
+    this.rules.set(id, updated);
+    return updated;
+  }
+
+  async deleteRule(id: string): Promise<boolean> {
+    return this.rules.delete(id);
   }
 }
 
