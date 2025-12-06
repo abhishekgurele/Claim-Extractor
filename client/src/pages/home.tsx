@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useState, useCallback, useEffect } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { FileText, RotateCcw, AlertCircle } from "lucide-react";
 import { UploadZone } from "@/components/upload-zone";
 import { ProcessingStatusBar } from "@/components/processing-status";
@@ -8,17 +8,53 @@ import { DocumentPreview } from "@/components/document-preview";
 import { ExportDialog } from "@/components/export-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SettingsDialog } from "@/components/settings-dialog";
+import { RulesDialog } from "@/components/rules-dialog";
+import { VerdictBanner } from "@/components/verdict-banner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { Document, ExtractedField, ExportData, ProcessingStatus } from "@shared/schema";
+import type { Document, ExtractedField, ExportData, ProcessingStatus, ClaimVerdict, Rule } from "@shared/schema";
 
 export default function Home() {
   const [document, setDocument] = useState<Document | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>("idle");
   const [progress, setProgress] = useState(0);
+  const [verdict, setVerdict] = useState<ClaimVerdict | null>(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
   const { toast } = useToast();
+
+  const { data: rules = [] } = useQuery<Rule[]>({
+    queryKey: ["/api/rules"],
+  });
+
+  const evaluateRules = useCallback(async (fields: ExtractedField[]) => {
+    if (!fields || fields.length === 0) return;
+    
+    setIsEvaluating(true);
+    try {
+      const response = await apiRequest("POST", "/api/rules/evaluate", {
+        fields,
+      });
+      const verdictData = await response.json();
+      setVerdict(verdictData);
+    } catch (error) {
+      console.error("Failed to evaluate rules:", error);
+      toast({
+        title: "Evaluation Failed",
+        description: "Could not evaluate validation rules. Verdict may be outdated.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsEvaluating(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (document?.extractedFields && document.extractedFields.length > 0 && status === "completed") {
+      evaluateRules(document.extractedFields);
+    }
+  }, [rules, document?.extractedFields, evaluateRules, status]);
 
   // Process document mutation
   const processDocumentMutation = useMutation({
@@ -136,6 +172,7 @@ export default function Home() {
     setDocument(null);
     setStatus("idle");
     setProgress(0);
+    setVerdict(null);
   }, []);
 
   const generateExportData = useCallback((): ExportData | null => {
@@ -197,6 +234,7 @@ export default function Home() {
                 />
               </>
             )}
+            <RulesDialog />
             <SettingsDialog />
             <ThemeToggle />
           </div>
@@ -238,19 +276,22 @@ export default function Home() {
             </div>
           </div>
         ) : showReview ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Review Grid - 2/3 width */}
-            <div className="lg:col-span-2">
-              <ReviewGrid
+          <div className="space-y-6">
+            <VerdictBanner verdict={verdict} isLoading={isEvaluating} />
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Review Grid - 2/3 width */}
+              <div className="lg:col-span-2">
+                <ReviewGrid
                 fields={document.extractedFields || []}
                 onFieldUpdate={handleFieldUpdate}
               />
             </div>
             
-            {/* Document Preview - 1/3 width */}
-            <div className="lg:col-span-1">
-              <div className="lg:sticky lg:top-24">
-                <DocumentPreview document={document} />
+              {/* Document Preview - 1/3 width */}
+              <div className="lg:col-span-1">
+                <div className="lg:sticky lg:top-24">
+                  <DocumentPreview document={document} />
+                </div>
               </div>
             </div>
           </div>

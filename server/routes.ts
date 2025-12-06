@@ -3,7 +3,23 @@ import { createServer, type Server } from "http";
 import multer from "multer";
 import { extractFieldsFromDocument, bufferToBase64 } from "./gemini";
 import { storage } from "./storage";
+import { evaluateClaim } from "./rules-engine";
+import { insertRuleSchema, ruleConditionSchema, extractedFieldSchema } from "@shared/schema";
+import { z } from "zod";
 import type { Document, ProcessDocumentResponse, InsertFieldDefinition } from "@shared/schema";
+
+const updateRuleSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  conditions: z.array(ruleConditionSchema).min(1, "Rule must have at least one condition").optional(),
+  logic: z.enum(["all", "any"]).optional(),
+  action: z.enum(["fail", "pass"]).optional(),
+  enabled: z.boolean().optional(),
+}).refine(data => Object.keys(data).length > 0, { message: "At least one field must be provided" });
+
+const evaluateFieldsSchema = z.object({
+  fields: z.array(extractedFieldSchema).min(1, "At least one valid field is required"),
+});
 
 // Configure multer for memory storage
 const upload = multer({
@@ -166,6 +182,73 @@ export async function registerRoutes(
       res.json(fields);
     } catch (error) {
       res.status(500).json({ error: "Failed to reset field definitions" });
+    }
+  });
+
+  // Rules management endpoints
+  app.get("/api/rules", async (_req: Request, res: Response) => {
+    try {
+      const rules = await storage.getRules();
+      res.json(rules);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch rules" });
+    }
+  });
+
+  app.post("/api/rules", async (req: Request, res: Response) => {
+    try {
+      const parsed = insertRuleSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.message });
+      }
+      const rule = await storage.createRule(parsed.data);
+      res.json(rule);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create rule" });
+    }
+  });
+
+  app.patch("/api/rules/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const parsed = updateRuleSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0]?.message || "Invalid update data" });
+      }
+      const rule = await storage.updateRule(id, parsed.data);
+      if (!rule) {
+        return res.status(404).json({ error: "Rule not found" });
+      }
+      res.json(rule);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update rule" });
+    }
+  });
+
+  app.delete("/api/rules/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const deleted = await storage.deleteRule(id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Rule not found" });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete rule" });
+    }
+  });
+
+  app.post("/api/rules/evaluate", async (req: Request, res: Response) => {
+    try {
+      const parsed = evaluateFieldsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0]?.message || "Invalid fields data" });
+      }
+      const enabledRules = await storage.getEnabledRules();
+      const verdict = evaluateClaim(parsed.data.fields, enabledRules);
+      res.json(verdict);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to evaluate rules" });
     }
   });
 
