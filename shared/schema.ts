@@ -324,6 +324,139 @@ export const bulkAnalysisResultSchema = z.object({
 });
 export type BulkAnalysisResult = z.infer<typeof bulkAnalysisResultSchema>;
 
+// ============================================
+// UNDERWRITING ENGINE SCHEMAS
+// ============================================
+
+// Applicant types
+export const applicantTypes = ["individual", "company"] as const;
+export type ApplicantType = typeof applicantTypes[number];
+
+// Risk tiers for underwriting
+export const riskTiers = ["preferred", "standard", "substandard", "decline"] as const;
+export type RiskTier = typeof riskTiers[number];
+
+// Underwriting signal dimension
+export const signalDimensions = ["risk", "profitability"] as const;
+export type SignalDimension = typeof signalDimensions[number];
+
+// Individual underwriting signal
+export const underwritingSignalSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  name: z.string(),
+  description: z.string(),
+  severity: z.enum(signalSeverities),
+  dimension: z.enum(signalDimensions),
+  confidence: z.number().min(0).max(100),
+  impactedFields: z.array(z.string()),
+  premiumImpact: z.number(),
+  recommendation: z.string(),
+});
+export type UnderwritingSignal = z.infer<typeof underwritingSignalSchema>;
+
+// Individual applicant input
+export const individualApplicantInputSchema = z.object({
+  applicantType: z.literal("individual"),
+  fullName: z.string(),
+  dateOfBirth: z.string().optional(),
+  age: z.number().optional(),
+  gender: z.enum(["male", "female", "other"]).optional(),
+  occupation: z.string().optional(),
+  annualIncome: z.number().optional(),
+  netWorth: z.number().optional(),
+  creditScore: z.number().optional(),
+  smokingStatus: z.enum(["never", "former", "current"]).optional(),
+  hasChronicConditions: z.boolean().optional(),
+  chronicConditions: z.array(z.string()).optional(),
+  bmi: z.number().optional(),
+  hazardousHobbies: z.array(z.string()).optional(),
+  previousClaimsCount: z.number().optional(),
+  previousClaimsAmount: z.number().optional(),
+  yearsWithPriorCoverage: z.number().optional(),
+  requestedCoverageAmount: z.number(),
+  coverageType: z.string(),
+  policyTerm: z.number().optional(),
+});
+export type IndividualApplicantInput = z.infer<typeof individualApplicantInputSchema>;
+
+// Company applicant input
+export const companyApplicantInputSchema = z.object({
+  applicantType: z.literal("company"),
+  companyName: z.string(),
+  industry: z.string(),
+  industryCode: z.string().optional(),
+  yearsInBusiness: z.number().optional(),
+  employeeCount: z.number().optional(),
+  annualRevenue: z.number().optional(),
+  annualPayroll: z.number().optional(),
+  netWorth: z.number().optional(),
+  previousClaimsCount: z.number().optional(),
+  previousClaimsAmount: z.number().optional(),
+  priorLossRatio: z.number().optional(),
+  oshaIncidents: z.number().optional(),
+  hasSafetyCertifications: z.boolean().optional(),
+  safetyCertifications: z.array(z.string()).optional(),
+  hasRiskManagementProgram: z.boolean().optional(),
+  geographicConcentration: z.number().optional(),
+  liquidityRatio: z.number().optional(),
+  requestedCoverageAmount: z.number(),
+  coverageType: z.string(),
+  policyTerm: z.number().optional(),
+});
+export type CompanyApplicantInput = z.infer<typeof companyApplicantInputSchema>;
+
+// Combined underwriting application input
+export const underwritingApplicationInputSchema = z.discriminatedUnion("applicantType", [
+  individualApplicantInputSchema,
+  companyApplicantInputSchema,
+]);
+export type UnderwritingApplicationInput = z.infer<typeof underwritingApplicationInputSchema>;
+
+// Underwriting assessment result
+export const underwritingAssessmentSchema = z.object({
+  id: z.string(),
+  applicantType: z.enum(applicantTypes),
+  applicantName: z.string(),
+  overallRiskScore: z.number().min(0).max(100),
+  profitabilityScore: z.number().min(0).max(100),
+  riskTier: z.enum(riskTiers),
+  basePremium: z.number(),
+  adjustmentPercentage: z.number(),
+  recommendedPremium: z.number(),
+  projectedLossRatio: z.number(),
+  triggeredSignals: z.array(underwritingSignalSchema),
+  evaluatedAt: z.string(),
+  inputData: underwritingApplicationInputSchema,
+  summary: z.string(),
+  isApproved: z.boolean(),
+  declineReason: z.string().optional(),
+});
+export type UnderwritingAssessment = z.infer<typeof underwritingAssessmentSchema>;
+
+// Request schema for underwriting analysis
+export const analyzeUnderwritingRequestSchema = z.object({
+  applicationData: underwritingApplicationInputSchema,
+});
+export type AnalyzeUnderwritingRequest = z.infer<typeof analyzeUnderwritingRequestSchema>;
+
+// Bulk underwriting analysis result
+export const bulkUnderwritingResultSchema = z.object({
+  totalApplications: z.number(),
+  analyzedAt: z.string(),
+  summary: z.object({
+    preferred: z.number(),
+    standard: z.number(),
+    substandard: z.number(),
+    declined: z.number(),
+    averageRiskScore: z.number(),
+    averagePremiumAdjustment: z.number(),
+    totalPremiumValue: z.number(),
+  }),
+  results: z.array(underwritingAssessmentSchema),
+});
+export type BulkUnderwritingResult = z.infer<typeof bulkUnderwritingResultSchema>;
+
 // Helper data for generating random claims
 const firstNames = ["John", "Jane", "Michael", "Sarah", "David", "Emma", "Robert", "Emily", "William", "Olivia", "James", "Sophia", "Daniel", "Isabella", "Matthew", "Mia", "Andrew", "Charlotte", "Joseph", "Amelia"];
 const lastNames = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson", "Thomas", "Taylor", "Moore", "Jackson", "Martin"];
@@ -493,3 +626,149 @@ export const sampleClaimData: ClaimDataInput[] = [
     daysSinceLastClaim: 0,
   },
 ];
+
+// ============================================
+// UNDERWRITING SAMPLE DATA GENERATORS
+// ============================================
+
+const occupations = ["Software Engineer", "Teacher", "Doctor", "Lawyer", "Accountant", "Nurse", "Construction Worker", "Electrician", "Firefighter", "Police Officer", "Chef", "Sales Manager", "Marketing Director", "Financial Analyst", "Pilot"];
+const hazardousOccupations = ["Construction Worker", "Electrician", "Firefighter", "Police Officer", "Pilot"];
+const industries = ["Technology", "Healthcare", "Manufacturing", "Retail", "Construction", "Transportation", "Finance", "Hospitality", "Agriculture", "Mining", "Oil & Gas", "Telecommunications", "Real Estate", "Education", "Professional Services"];
+const highRiskIndustries = ["Construction", "Mining", "Oil & Gas", "Manufacturing", "Transportation", "Agriculture"];
+const hazardousHobbies = ["Skydiving", "Rock Climbing", "Scuba Diving", "Motor Racing", "Base Jumping", "Mountaineering"];
+const safetyCertifications = ["ISO 45001", "OSHA VPP", "ANSI Z10", "ISO 14001", "ISO 9001"];
+const coverageTypesIndividual = ["Life", "Health", "Disability", "Auto"];
+const coverageTypesCompany = ["General Liability", "Workers Compensation", "Professional Liability", "Property"];
+
+function generateRandomIndividual(index: number): IndividualApplicantInput {
+  const firstName = randomElement(firstNames);
+  const lastName = randomElement(lastNames);
+  const age = 18 + Math.floor(Math.random() * 62);
+  const occupation = randomElement(occupations);
+  const smokingStatus = Math.random() > 0.75 ? (Math.random() > 0.5 ? "current" : "former") : "never";
+  const hasHazardousHobbies = Math.random() > 0.85;
+  const hasChronicConditions = Math.random() > 0.7;
+  const creditScore = 300 + Math.floor(Math.random() * 550);
+  const annualIncome = 30000 + Math.floor(Math.random() * 270000);
+  const requestedCoverage = Math.random() > 0.7 
+    ? annualIncome * (5 + Math.floor(Math.random() * 10))
+    : annualIncome * (2 + Math.floor(Math.random() * 4));
+  
+  return {
+    applicantType: "individual",
+    fullName: `${firstName} ${lastName}`,
+    age,
+    gender: Math.random() > 0.5 ? "male" : "female",
+    occupation,
+    annualIncome,
+    netWorth: annualIncome * (1 + Math.floor(Math.random() * 10)),
+    creditScore,
+    smokingStatus: smokingStatus as "never" | "former" | "current",
+    hasChronicConditions,
+    chronicConditions: hasChronicConditions ? [randomElement(["Diabetes", "Hypertension", "Heart Disease", "Asthma", "Arthritis"])] : [],
+    bmi: 18 + Math.floor(Math.random() * 22),
+    hazardousHobbies: hasHazardousHobbies ? [randomElement(hazardousHobbies)] : [],
+    previousClaimsCount: Math.random() > 0.6 ? Math.floor(Math.random() * 5) : 0,
+    previousClaimsAmount: Math.random() > 0.6 ? Math.floor(Math.random() * 50000) : 0,
+    yearsWithPriorCoverage: Math.floor(Math.random() * 20),
+    requestedCoverageAmount: requestedCoverage,
+    coverageType: randomElement(coverageTypesIndividual),
+    policyTerm: randomElement([1, 5, 10, 20, 30]),
+  };
+}
+
+function generateRandomCompany(index: number): CompanyApplicantInput {
+  const companyName = `${randomElement(lastNames)} ${randomElement(["Industries", "Corp", "LLC", "Inc", "Solutions", "Group", "Services"])}`;
+  const industry = randomElement(industries);
+  const isHighRiskIndustry = highRiskIndustries.includes(industry);
+  const yearsInBusiness = Math.floor(Math.random() * 50) + 1;
+  const employeeCount = Math.floor(Math.random() * 500) + 5;
+  const annualRevenue = employeeCount * (50000 + Math.floor(Math.random() * 150000));
+  const annualPayroll = employeeCount * (40000 + Math.floor(Math.random() * 60000));
+  const hasSafetyCerts = Math.random() > 0.6;
+  const hasRiskProgram = Math.random() > 0.5;
+  const priorLossRatio = Math.random() * 100;
+  
+  return {
+    applicantType: "company",
+    companyName,
+    industry,
+    industryCode: `NAICS-${Math.floor(Math.random() * 900000) + 100000}`,
+    yearsInBusiness,
+    employeeCount,
+    annualRevenue,
+    annualPayroll,
+    netWorth: annualRevenue * (0.5 + Math.random() * 2),
+    previousClaimsCount: Math.random() > 0.5 ? Math.floor(Math.random() * 10) : 0,
+    previousClaimsAmount: Math.random() > 0.5 ? Math.floor(Math.random() * 500000) : 0,
+    priorLossRatio,
+    oshaIncidents: isHighRiskIndustry ? Math.floor(Math.random() * 5) : (Math.random() > 0.8 ? 1 : 0),
+    hasSafetyCertifications: hasSafetyCerts,
+    safetyCertifications: hasSafetyCerts ? [randomElement(safetyCertifications)] : [],
+    hasRiskManagementProgram: hasRiskProgram,
+    geographicConcentration: Math.random() * 100,
+    liquidityRatio: 0.5 + Math.random() * 2.5,
+    requestedCoverageAmount: annualRevenue * (0.5 + Math.random()),
+    coverageType: randomElement(coverageTypesCompany),
+    policyTerm: randomElement([1, 2, 3]),
+  };
+}
+
+export function generateBulkUnderwritingApplications(count: number, type?: ApplicantType): UnderwritingApplicationInput[] {
+  const applications: UnderwritingApplicationInput[] = [];
+  for (let i = 0; i < count; i++) {
+    const applicantType = type || (Math.random() > 0.5 ? "individual" : "company");
+    if (applicantType === "individual") {
+      applications.push(generateRandomIndividual(i));
+    } else {
+      applications.push(generateRandomCompany(i));
+    }
+  }
+  return applications;
+}
+
+export const sampleIndividualApplication: IndividualApplicantInput = {
+  applicantType: "individual",
+  fullName: "John Smith",
+  age: 35,
+  gender: "male",
+  occupation: "Software Engineer",
+  annualIncome: 150000,
+  netWorth: 500000,
+  creditScore: 780,
+  smokingStatus: "never",
+  hasChronicConditions: false,
+  chronicConditions: [],
+  bmi: 24,
+  hazardousHobbies: [],
+  previousClaimsCount: 0,
+  previousClaimsAmount: 0,
+  yearsWithPriorCoverage: 10,
+  requestedCoverageAmount: 500000,
+  coverageType: "Life",
+  policyTerm: 20,
+};
+
+export const sampleCompanyApplication: CompanyApplicantInput = {
+  applicantType: "company",
+  companyName: "Tech Solutions Inc",
+  industry: "Technology",
+  industryCode: "NAICS-541511",
+  yearsInBusiness: 15,
+  employeeCount: 50,
+  annualRevenue: 5000000,
+  annualPayroll: 2500000,
+  netWorth: 3000000,
+  previousClaimsCount: 1,
+  previousClaimsAmount: 25000,
+  priorLossRatio: 35,
+  oshaIncidents: 0,
+  hasSafetyCertifications: true,
+  safetyCertifications: ["ISO 9001"],
+  hasRiskManagementProgram: true,
+  geographicConcentration: 40,
+  liquidityRatio: 2.1,
+  requestedCoverageAmount: 2000000,
+  coverageType: "General Liability",
+  policyTerm: 1,
+};

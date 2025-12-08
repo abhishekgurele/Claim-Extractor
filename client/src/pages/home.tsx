@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { FileText, RotateCcw, AlertCircle, Shield } from "lucide-react";
+import { FileText, RotateCcw, AlertCircle, Shield, ClipboardCheck } from "lucide-react";
 import { UploadZone } from "@/components/upload-zone";
 import { ProcessingStatusBar } from "@/components/processing-status";
 import { ReviewGrid } from "@/components/review-grid";
@@ -275,6 +275,12 @@ export default function Home() {
               <Button variant="outline" data-testid="link-fraud-detection">
                 <Shield className="w-4 h-4 mr-2" />
                 Fraud Detection
+              </Button>
+            </Link>
+            <Link href="/underwriting">
+              <Button variant="outline" data-testid="link-underwriting">
+                <ClipboardCheck className="w-4 h-4 mr-2" />
+                Underwriting
               </Button>
             </Link>
             <RulesDialog />

@@ -5,9 +5,10 @@ import { extractFieldsFromDocument, bufferToBase64 } from "./gemini";
 import { storage } from "./storage";
 import { evaluateClaim } from "./rules-engine";
 import { sendMissingDocumentsEmail } from "./email";
-import { insertRuleSchema, ruleConditionSchema, extractedFieldSchema, createSubmissionRequestSchema, requiredDocumentTypes, analyzeFraudRequestSchema, sampleClaimData, generateBulkClaims, claimDataInputSchema } from "@shared/schema";
-import type { BulkAnalysisResult, ClaimDataInput } from "@shared/schema";
+import { insertRuleSchema, ruleConditionSchema, extractedFieldSchema, createSubmissionRequestSchema, requiredDocumentTypes, analyzeFraudRequestSchema, sampleClaimData, generateBulkClaims, claimDataInputSchema, analyzeUnderwritingRequestSchema, generateBulkUnderwritingApplications, sampleIndividualApplication, sampleCompanyApplication, underwritingApplicationInputSchema } from "@shared/schema";
+import type { BulkAnalysisResult, ClaimDataInput, BulkUnderwritingResult, UnderwritingApplicationInput } from "@shared/schema";
 import { analyzeFraud } from "./fraud-engine";
+import { analyzeUnderwriting } from "./underwriting-engine";
 import { z } from "zod";
 import type { Document, ProcessDocumentResponse, InsertFieldDefinition, RequiredDocumentType } from "@shared/schema";
 
@@ -562,6 +563,94 @@ export async function registerRoutes(
       res.json({ claims, count: claims.length });
     } catch (error) {
       res.status(500).json({ error: "Failed to parse CSV" });
+    }
+  });
+
+  // ============================================
+  // UNDERWRITING ENGINE ENDPOINTS
+  // ============================================
+
+  app.post("/api/underwriting/analyze", async (req: Request, res: Response) => {
+    try {
+      const parsed = analyzeUnderwritingRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid request data", details: parsed.error.flatten() });
+      }
+      const assessment = analyzeUnderwriting(parsed.data.applicationData);
+      res.json(assessment);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to analyze underwriting application" });
+    }
+  });
+
+  app.get("/api/underwriting/sample-data", async (req: Request, res: Response) => {
+    try {
+      const type = req.query.type as string;
+      if (type === "individual") {
+        res.json(sampleIndividualApplication);
+      } else if (type === "company") {
+        res.json(sampleCompanyApplication);
+      } else {
+        res.json({ individual: sampleIndividualApplication, company: sampleCompanyApplication });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get sample data" });
+    }
+  });
+
+  app.get("/api/underwriting/generate-bulk", async (req: Request, res: Response) => {
+    try {
+      const count = Math.min(500, parseInt(req.query.count as string) || 100);
+      const type = req.query.type as "individual" | "company" | undefined;
+      const applications = generateBulkUnderwritingApplications(count, type);
+      res.json({ applications, count: applications.length });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate bulk applications" });
+    }
+  });
+
+  app.post("/api/underwriting/analyze-bulk", async (req: Request, res: Response) => {
+    try {
+      const { applications } = req.body as { applications: UnderwritingApplicationInput[] };
+      
+      if (!applications || !Array.isArray(applications) || applications.length === 0) {
+        return res.status(400).json({ error: "No applications provided" });
+      }
+
+      const results = applications.map(app => {
+        const parsed = underwritingApplicationInputSchema.safeParse(app);
+        if (!parsed.success) {
+          return null;
+        }
+        return analyzeUnderwriting(parsed.data);
+      }).filter(Boolean);
+
+      const validResults = results.filter(r => r !== null) as NonNullable<typeof results[number]>[];
+
+      const summary = {
+        preferred: validResults.filter(r => r.riskTier === "preferred").length,
+        standard: validResults.filter(r => r.riskTier === "standard").length,
+        substandard: validResults.filter(r => r.riskTier === "substandard").length,
+        declined: validResults.filter(r => r.riskTier === "decline").length,
+        averageRiskScore: validResults.length > 0 
+          ? validResults.reduce((sum, r) => sum + r.overallRiskScore, 0) / validResults.length 
+          : 0,
+        averagePremiumAdjustment: validResults.length > 0
+          ? validResults.reduce((sum, r) => sum + r.adjustmentPercentage, 0) / validResults.length
+          : 0,
+        totalPremiumValue: validResults.reduce((sum, r) => sum + r.recommendedPremium, 0),
+      };
+
+      const bulkResult: BulkUnderwritingResult = {
+        totalApplications: validResults.length,
+        analyzedAt: new Date().toISOString(),
+        summary,
+        results: validResults,
+      };
+
+      res.json(bulkResult);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to analyze bulk applications" });
     }
   });
 

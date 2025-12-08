@@ -122,3 +122,43 @@ Preferred communication style: Simple, everyday language.
 - Basic user schema defined but not actively used
 - Session management libraries included (express-session, passport, passport-local)
 - Ready for authentication implementation when needed
+
+### Underwriting Agent
+
+**Purpose:** Assess insurance applications for individuals and companies using rule-based risk evaluation
+
+**Page:** `/underwriting`
+
+**Features:**
+- Single application analysis with forms for individual or company data
+- Bulk analysis: Generate 100+ random applications and analyze in batch
+- Risk tier assignment: Preferred, Standard, Substandard, Decline
+- Premium recommendation calculation based on risk factors
+- Triggered signals with severity levels (critical, warning, info)
+
+**Individual Risk Rules (UW001-UW012):**
+- Age-based risk (elderly, young drivers)
+- Credit score thresholds
+- Smoking status and BMI
+- Chronic conditions
+- Hazardous hobbies
+- Previous claims history
+
+**Company Risk Rules (UW101-UW112):**
+- Years in business
+- Industry risk classification
+- OSHA incident history
+- Loss ratio analysis
+- Safety certifications
+- Liquidity and financial stability
+
+**API Endpoints:**
+- `POST /api/underwriting/analyze` - Analyze single application
+- `GET /api/underwriting/sample-data` - Get sample individual/company data
+- `GET /api/underwriting/generate-bulk?count=100&type=individual|company` - Generate random applications
+- `POST /api/underwriting/analyze-bulk` - Bulk analysis with summary stats
+
+**Key Files:**
+- `shared/schema.ts` - Underwriting types and Zod schemas
+- `server/underwriting-engine.ts` - Risk rules and analysis logic
+- `client/src/pages/underwriting.tsx` - UI page

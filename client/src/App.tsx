@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/home";
 import FraudDetection from "@/pages/fraud-detection";
+import Underwriting from "@/pages/underwriting";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -12,6 +13,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/fraud-detection" component={FraudDetection} />
+      <Route path="/underwriting" component={Underwriting} />
       <Route component={NotFound} />
     </Switch>
   );
