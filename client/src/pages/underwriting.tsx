@@ -210,8 +210,8 @@ export default function Underwriting() {
     }
 
     const phoneNumber = assessmentData.inputData.applicantType === "individual" 
-      ? (assessmentData.inputData as any).phone || "+15551234567"
-      : (assessmentData.inputData as any).contactPhone || "+15551234567";
+      ? (assessmentData.inputData as any).phone || "+17259706789"
+      : (assessmentData.inputData as any).contactPhone || "+17259706789";
 
     const criticalSignals = assessmentData.triggeredSignals
       .filter(s => s.severity === "critical")
