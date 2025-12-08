@@ -1130,33 +1130,54 @@ export default function Underwriting() {
                     <CardContent>
                       <ScrollArea className="h-[400px]">
                         <div className="space-y-2">
-                          {bulkResults.results.map((result, idx) => (
-                            <div
-                              key={result.id}
-                              className={`flex items-center justify-between p-3 rounded-md border cursor-pointer hover-elevate ${
-                                selectedBulkAssessment?.id === result.id ? 'border-primary bg-primary/5' : ''
-                              }`}
-                              onClick={() => setSelectedBulkAssessment(result)}
-                              data-testid={`bulk-result-${idx}`}
-                            >
-                              <div className="flex items-center gap-3">
-                                {result.applicantType === "individual" ? (
-                                  <User className="w-4 h-4 text-muted-foreground" />
-                                ) : (
-                                  <Building2 className="w-4 h-4 text-muted-foreground" />
-                                )}
-                                <div>
-                                  <div className="font-medium text-sm">{result.applicantName}</div>
-                                  <div className="text-xs text-muted-foreground">
-                                    Score: {result.overallRiskScore} | Premium: ${result.recommendedPremium.toLocaleString()}
+                          {bulkResults.results.map((result, idx) => {
+                            const hasCriticalSignals = result.triggeredSignals.some(s => s.severity === "critical");
+                            return (
+                              <div
+                                key={result.id}
+                                className={`flex items-center justify-between p-3 rounded-md border cursor-pointer hover-elevate ${
+                                  selectedBulkAssessment?.id === result.id ? 'border-primary bg-primary/5' : ''
+                                }`}
+                                onClick={() => setSelectedBulkAssessment(result)}
+                                data-testid={`bulk-result-${idx}`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  {result.applicantType === "individual" ? (
+                                    <User className="w-4 h-4 text-muted-foreground" />
+                                  ) : (
+                                    <Building2 className="w-4 h-4 text-muted-foreground" />
+                                  )}
+                                  <div>
+                                    <div className="font-medium text-sm">{result.applicantName}</div>
+                                    <div className="text-xs text-muted-foreground">
+                                      Score: {result.overallRiskScore} | Premium: ${result.recommendedPremium.toLocaleString()}
+                                    </div>
                                   </div>
                                 </div>
+                                <div className="flex items-center gap-2">
+                                  {hasCriticalSignals && (
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toast({
+                                          title: "Voice Call Setup Required",
+                                          description: "Configure ElevenLabs API key, Agent ID, and Phone Number ID to enable voice calls.",
+                                        });
+                                      }}
+                                      data-testid={`button-call-bulk-${idx}`}
+                                    >
+                                      <Phone className="w-4 h-4 text-amber-600" />
+                                    </Button>
+                                  )}
+                                  <Badge variant={getTierBadgeVariant(result.riskTier)}>
+                                    {result.riskTier}
+                                  </Badge>
+                                </div>
                               </div>
-                              <Badge variant={getTierBadgeVariant(result.riskTier)}>
-                                {result.riskTier}
-                              </Badge>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </ScrollArea>
                     </CardContent>
@@ -1205,6 +1226,34 @@ export default function Underwriting() {
                                   {signal.name}
                                 </Badge>
                               ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedBulkAssessment.triggeredSignals.some(s => s.severity === "critical") && (
+                          <div className="border-t pt-4">
+                            <div className="flex items-center justify-between gap-4 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                              <div className="flex items-center gap-2">
+                                <PhoneCall className="w-5 h-5 text-amber-600" />
+                                <div>
+                                  <p className="text-sm font-medium">Clarification Recommended</p>
+                                  <p className="text-xs text-muted-foreground">Critical signals detected - voice call may help clarify details</p>
+                                </div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  toast({
+                                    title: "Voice Call Setup Required",
+                                    description: "Configure ElevenLabs API key, Agent ID, and Phone Number ID to enable voice calls.",
+                                  });
+                                }}
+                                data-testid="button-call-bulk-selected"
+                              >
+                                <Phone className="w-4 h-4 mr-2" />
+                                Call Applicant
+                              </Button>
                             </div>
                           </div>
                         )}
