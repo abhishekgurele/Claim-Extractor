@@ -19,7 +19,9 @@ import {
   TrendingUp,
   TrendingDown,
   BarChart3,
-  DollarSign
+  DollarSign,
+  Phone,
+  PhoneCall
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -868,6 +870,34 @@ export default function Underwriting() {
                             {assessment.summary}
                           </p>
                         </div>
+
+                        {assessment.triggeredSignals.some(s => s.severity === "critical") && (
+                          <div className="border-t pt-4">
+                            <div className="flex items-center justify-between gap-4 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                              <div className="flex items-center gap-2">
+                                <PhoneCall className="w-5 h-5 text-amber-600" />
+                                <div>
+                                  <p className="text-sm font-medium">Clarification Recommended</p>
+                                  <p className="text-xs text-muted-foreground">Critical signals detected - voice call may help clarify details</p>
+                                </div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  toast({
+                                    title: "Voice Call Setup Required",
+                                    description: "Configure ElevenLabs API key, Agent ID, and Phone Number ID to enable voice calls.",
+                                  });
+                                }}
+                                data-testid="button-trigger-call"
+                              >
+                                <Phone className="w-4 h-4 mr-2" />
+                                Call Applicant
+                              </Button>
+                            </div>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
 

@@ -9,6 +9,7 @@ import { insertRuleSchema, ruleConditionSchema, extractedFieldSchema, createSubm
 import type { BulkAnalysisResult, ClaimDataInput, BulkUnderwritingResult, UnderwritingApplicationInput } from "@shared/schema";
 import { analyzeFraud } from "./fraud-engine";
 import { analyzeUnderwriting } from "./underwriting-engine";
+import { initiateVoiceCall, getCallLogs, getCallLog, determineCallNeeded, type VoiceCallRequest } from "./voice-calling";
 import { z } from "zod";
 import type { Document, ProcessDocumentResponse, InsertFieldDefinition, RequiredDocumentType } from "@shared/schema";
 
@@ -651,6 +652,83 @@ export async function registerRoutes(
       res.json(bulkResult);
     } catch (error) {
       res.status(500).json({ error: "Failed to analyze bulk applications" });
+    }
+  });
+
+  // ============================================
+  // VOICE CALLING ENDPOINTS
+  // ============================================
+
+  const voiceCallRequestSchema = z.object({
+    phoneNumber: z.string().min(10, "Valid phone number required"),
+    applicantName: z.string().min(1, "Applicant name required"),
+    callReason: z.enum(["missing_info", "clarification", "follow_up"]),
+    context: z.object({
+      assessmentType: z.enum(["underwriting", "fraud"]),
+      assessmentId: z.string(),
+      triggeredSignals: z.array(z.string()),
+      missingFields: z.array(z.string()).optional(),
+      clarificationNeeded: z.string().optional(),
+    }),
+  });
+
+  app.post("/api/voice/call", async (req: Request, res: Response) => {
+    try {
+      const parsed = voiceCallRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0]?.message || "Invalid request" });
+      }
+      const result = await initiateVoiceCall(parsed.data as VoiceCallRequest);
+      if (!result.success) {
+        return res.status(result.error?.includes("not configured") ? 503 : 500).json(result);
+      }
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to initiate voice call" });
+    }
+  });
+
+  app.get("/api/voice/logs", async (_req: Request, res: Response) => {
+    try {
+      const logs = getCallLogs();
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch call logs" });
+    }
+  });
+
+  app.get("/api/voice/logs/:id", async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const log = getCallLog(id);
+      if (!log) {
+        return res.status(404).json({ error: "Call log not found" });
+      }
+      res.json(log);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch call log" });
+    }
+  });
+
+  app.get("/api/voice/config", async (_req: Request, res: Response) => {
+    res.json({
+      configured: !!(process.env.ELEVENLABS_API_KEY && process.env.ELEVENLABS_AGENT_ID && process.env.ELEVENLABS_PHONE_NUMBER_ID),
+      hasApiKey: !!process.env.ELEVENLABS_API_KEY,
+      hasAgentId: !!process.env.ELEVENLABS_AGENT_ID,
+      hasPhoneNumberId: !!process.env.ELEVENLABS_PHONE_NUMBER_ID,
+    });
+  });
+
+  app.post("/api/voice/check-needed", async (req: Request, res: Response) => {
+    try {
+      const { assessment } = req.body;
+      if (!assessment) {
+        return res.status(400).json({ error: "Assessment data required" });
+      }
+      const result = determineCallNeeded(assessment);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to check call need" });
     }
   });
 
