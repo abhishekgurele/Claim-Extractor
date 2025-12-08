@@ -5,7 +5,8 @@ import { extractFieldsFromDocument, bufferToBase64 } from "./gemini";
 import { storage } from "./storage";
 import { evaluateClaim } from "./rules-engine";
 import { sendMissingDocumentsEmail } from "./email";
-import { insertRuleSchema, ruleConditionSchema, extractedFieldSchema, createSubmissionRequestSchema, requiredDocumentTypes, analyzeFraudRequestSchema, sampleClaimData } from "@shared/schema";
+import { insertRuleSchema, ruleConditionSchema, extractedFieldSchema, createSubmissionRequestSchema, requiredDocumentTypes, analyzeFraudRequestSchema, sampleClaimData, generateBulkClaims, claimDataInputSchema } from "@shared/schema";
+import type { BulkAnalysisResult, ClaimDataInput } from "@shared/schema";
 import { analyzeFraud } from "./fraud-engine";
 import { z } from "zod";
 import type { Document, ProcessDocumentResponse, InsertFieldDefinition, RequiredDocumentType } from "@shared/schema";
@@ -428,6 +429,139 @@ export async function registerRoutes(
       res.json(sampleClaimData);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch sample data" });
+    }
+  });
+
+  app.get("/api/fraud/generate-bulk", async (req: Request, res: Response) => {
+    try {
+      const count = Math.min(parseInt(req.query.count as string) || 100, 500);
+      const claims = generateBulkClaims(count);
+      res.json(claims);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate bulk claims" });
+    }
+  });
+
+  app.post("/api/fraud/analyze-bulk", async (req: Request, res: Response) => {
+    try {
+      const claimsSchema = z.object({
+        claims: z.array(claimDataInputSchema).min(1).max(500),
+      });
+      const parsed = claimsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0]?.message || "Invalid claims data" });
+      }
+      
+      const results = parsed.data.claims.map(claim => analyzeFraud(claim));
+      
+      const highRisk = results.filter(r => r.riskLevel === "high").length;
+      const mediumRisk = results.filter(r => r.riskLevel === "medium").length;
+      const lowRisk = results.filter(r => r.riskLevel === "low").length;
+      const averageScore = Math.round(results.reduce((sum, r) => sum + r.overallScore, 0) / results.length);
+      
+      const bulkResult: BulkAnalysisResult = {
+        totalClaims: results.length,
+        analyzedAt: new Date().toISOString(),
+        summary: {
+          highRisk,
+          mediumRisk,
+          lowRisk,
+          averageScore,
+        },
+        results,
+      };
+      
+      res.json(bulkResult);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to analyze bulk claims" });
+    }
+  });
+
+  app.post("/api/fraud/parse-csv", async (req: Request, res: Response) => {
+    try {
+      const { csvContent } = req.body;
+      if (!csvContent || typeof csvContent !== "string") {
+        return res.status(400).json({ error: "CSV content is required" });
+      }
+      
+      const lines = csvContent.trim().split("\n");
+      if (lines.length < 2) {
+        return res.status(400).json({ error: "CSV must have header row and at least one data row" });
+      }
+      
+      const headers = lines[0].split(",").map(h => h.trim().toLowerCase());
+      const claims: ClaimDataInput[] = [];
+      
+      const headerMap: Record<string, keyof ClaimDataInput> = {
+        "claimant name": "claimantName",
+        "claimantname": "claimantName",
+        "policy number": "policyNumber",
+        "policynumber": "policyNumber",
+        "claim number": "claimNumber",
+        "claimnumber": "claimNumber",
+        "claim date": "claimDate",
+        "claimdate": "claimDate",
+        "claim amount": "claimAmount",
+        "claimamount": "claimAmount",
+        "incident date": "incidentDate",
+        "incidentdate": "incidentDate",
+        "incident description": "incidentDescription",
+        "incidentdescription": "incidentDescription",
+        "incident location": "incidentLocation",
+        "incidentlocation": "incidentLocation",
+        "treatment date": "treatmentDate",
+        "treatmentdate": "treatmentDate",
+        "provider name": "providerName",
+        "providername": "providerName",
+        "provider npi": "providerNPI",
+        "providernpi": "providerNPI",
+        "diagnosis code": "diagnosisCode",
+        "diagnosiscode": "diagnosisCode",
+        "claimant address": "claimantAddress",
+        "claimantaddress": "claimantAddress",
+        "claimant phone": "claimantPhone",
+        "claimantphone": "claimantPhone",
+        "claimant email": "claimantEmail",
+        "claimantemail": "claimantEmail",
+        "vehicle info": "vehicleInfo",
+        "vehicleinfo": "vehicleInfo",
+        "policy holder name": "policyHolderName",
+        "policyholdername": "policyHolderName",
+        "policy limit": "policyLimit",
+        "policylimit": "policyLimit",
+        "previous claims count": "previousClaimsCount",
+        "previousclaimscount": "previousClaimsCount",
+        "days since last claim": "daysSinceLastClaim",
+        "dayssincelastclaim": "daysSinceLastClaim",
+      };
+      
+      for (let i = 1; i < lines.length && claims.length < 500; i++) {
+        const values = lines[i].split(",").map(v => v.trim());
+        const claim: ClaimDataInput = {};
+        
+        headers.forEach((header, idx) => {
+          const field = headerMap[header];
+          if (field && values[idx]) {
+            const value = values[idx];
+            if (field === "claimAmount" || field === "policyLimit" || field === "previousClaimsCount" || field === "daysSinceLastClaim") {
+              const num = parseFloat(value);
+              if (!isNaN(num)) {
+                (claim as any)[field] = num;
+              }
+            } else {
+              (claim as any)[field] = value;
+            }
+          }
+        });
+        
+        if (Object.keys(claim).length > 0) {
+          claims.push(claim);
+        }
+      }
+      
+      res.json({ claims, count: claims.length });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to parse CSV" });
     }
   });
 

@@ -310,6 +310,122 @@ export const analyzeFraudRequestSchema = z.object({
 });
 export type AnalyzeFraudRequest = z.infer<typeof analyzeFraudRequestSchema>;
 
+// Bulk analysis result schema
+export const bulkAnalysisResultSchema = z.object({
+  totalClaims: z.number(),
+  analyzedAt: z.string(),
+  summary: z.object({
+    highRisk: z.number(),
+    mediumRisk: z.number(),
+    lowRisk: z.number(),
+    averageScore: z.number(),
+  }),
+  results: z.array(fraudAssessmentSchema),
+});
+export type BulkAnalysisResult = z.infer<typeof bulkAnalysisResultSchema>;
+
+// Helper data for generating random claims
+const firstNames = ["John", "Jane", "Michael", "Sarah", "David", "Emma", "Robert", "Emily", "William", "Olivia", "James", "Sophia", "Daniel", "Isabella", "Matthew", "Mia", "Andrew", "Charlotte", "Joseph", "Amelia"];
+const lastNames = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson", "Thomas", "Taylor", "Moore", "Jackson", "Martin"];
+const providers = ["City General Hospital", "Community Medical Center", "Regional Health Clinic", "Premier Care Hospital", "Wellness Medical Group", "QuickCare Clinic", "Unknown Provider", "Private Practice", "Central Hospital", "Metro Health"];
+const locations = ["Main St & Oak Ave", "Highway 101", "Parking Lot A", "Home", "Workplace", "Shopping Mall", "Interstate 95", "Downtown Area", "Residential Area", "Industrial Zone"];
+const descriptions = [
+  "Vehicle collision at intersection",
+  "Slip and fall accident",
+  "Medical procedure complications", 
+  "Minor fender bender",
+  "Workplace injury",
+  "Sports injury during game",
+  "Home accident",
+  "Auto accident on highway",
+  "Pedestrian incident",
+  "Property damage from storm",
+  "brief",
+  "accident",
+];
+const diagnosisCodes = ["S00.0", "S13.4", "Z99.9", "M54.5", "S62.5", "T14.9", "S92.9", "K08.9", "R51", "J06.9"];
+
+function randomElement<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function randomDate(daysAgo: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - Math.floor(Math.random() * daysAgo));
+  return date.toISOString().split("T")[0];
+}
+
+function generateRandomClaim(index: number): ClaimDataInput {
+  const firstName = randomElement(firstNames);
+  const lastName = randomElement(lastNames);
+  const claimantName = `${firstName} ${lastName}`;
+  
+  const policyFirstName = randomElement(firstNames);
+  const policyLastName = randomElement(lastNames);
+  const policyHolderName = Math.random() > 0.3 ? claimantName : `${policyFirstName} ${policyLastName}`;
+  
+  const incidentDate = randomDate(60);
+  const treatmentDateOffset = Math.random() > 0.2 ? Math.floor(Math.random() * 3) : -1;
+  const treatmentDate = new Date(incidentDate);
+  treatmentDate.setDate(treatmentDate.getDate() + treatmentDateOffset);
+  
+  const claimDateOffset = Math.floor(Math.random() * 7);
+  const claimDate = new Date(incidentDate);
+  claimDate.setDate(claimDate.getDate() + claimDateOffset);
+  
+  const claimAmount = Math.random() > 0.9 
+    ? Math.round(Math.random() * 100000) 
+    : Math.random() > 0.7 
+      ? Math.round(Math.random() * 10) * 1000 
+      : Math.round(Math.random() * 50000);
+  
+  const policyLimit = Math.random() > 0.85 
+    ? claimAmount - Math.floor(Math.random() * 10000) 
+    : claimAmount + Math.floor(Math.random() * 50000) + 10000;
+  
+  const previousClaimsCount = Math.random() > 0.8 
+    ? Math.floor(Math.random() * 6) + 3 
+    : Math.floor(Math.random() * 3);
+  
+  const daysSinceLastClaim = previousClaimsCount > 0 
+    ? (Math.random() > 0.7 ? Math.floor(Math.random() * 60) : Math.floor(Math.random() * 365) + 60) 
+    : 0;
+
+  const providerName = randomElement(providers);
+  const hasNPI = !providerName.toLowerCase().includes("unknown") && Math.random() > 0.3;
+
+  return {
+    claimantName,
+    policyNumber: `POL-2024-${String(10000 + index).padStart(5, "0")}`,
+    claimNumber: `CLM-2024-${String(50000 + index).padStart(5, "0")}`,
+    claimDate: claimDate.toISOString().split("T")[0],
+    claimAmount,
+    incidentDate,
+    incidentDescription: randomElement(descriptions),
+    incidentLocation: randomElement(locations),
+    treatmentDate: treatmentDate.toISOString().split("T")[0],
+    providerName,
+    providerNPI: hasNPI ? String(1000000000 + Math.floor(Math.random() * 9000000000)) : undefined,
+    diagnosisCode: randomElement(diagnosisCodes),
+    claimantAddress: Math.random() > 0.2 ? `${Math.floor(Math.random() * 999) + 1} ${randomElement(["Main", "Oak", "Elm", "Pine", "Cedar"])} Street, Springfield` : undefined,
+    claimantPhone: Math.random() > 0.15 ? `555-${String(Math.floor(Math.random() * 900) + 100)}-${String(Math.floor(Math.random() * 9000) + 1000)}` : undefined,
+    claimantEmail: Math.random() > 0.15 ? `${firstName.toLowerCase()}.${lastName.toLowerCase()}@email.com` : undefined,
+    vehicleInfo: Math.random() > 0.5 ? `${2018 + Math.floor(Math.random() * 7)} ${randomElement(["Toyota", "Honda", "Ford", "Chevrolet", "BMW"])} ${randomElement(["Camry", "Civic", "F-150", "Malibu", "X3"])}` : undefined,
+    policyHolderName,
+    policyLimit: Math.max(policyLimit, 5000),
+    previousClaimsCount,
+    daysSinceLastClaim: previousClaimsCount > 0 ? daysSinceLastClaim : undefined,
+  };
+}
+
+export function generateBulkClaims(count: number): ClaimDataInput[] {
+  const claims: ClaimDataInput[] = [];
+  for (let i = 0; i < count; i++) {
+    claims.push(generateRandomClaim(i));
+  }
+  return claims;
+}
+
 // Sample/dummy claim data for testing
 export const sampleClaimData: ClaimDataInput[] = [
   {
