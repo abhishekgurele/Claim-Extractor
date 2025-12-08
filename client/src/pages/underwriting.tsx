@@ -148,11 +148,88 @@ export default function Underwriting() {
   const [bulkResults, setBulkResults] = useState<BulkUnderwritingResult | null>(null);
   const [selectedBulkAssessment, setSelectedBulkAssessment] = useState<UnderwritingAssessment | null>(null);
   const [bulkType, setBulkType] = useState<"individual" | "company" | "mixed">("mixed");
+  const [callingAssessmentId, setCallingAssessmentId] = useState<string | null>(null);
   const { toast } = useToast();
 
   const { data: sampleData } = useQuery<{ individual: IndividualApplicantInput; company: CompanyApplicantInput }>({
     queryKey: ["/api/underwriting/sample-data"],
   });
+
+  const { data: voiceConfig } = useQuery<{ configured: boolean; hasApiKey: boolean; hasAgentId: boolean; hasPhoneNumberId: boolean }>({
+    queryKey: ["/api/voice/config"],
+  });
+
+  const voiceCallMutation = useMutation({
+    mutationFn: async (data: {
+      phoneNumber: string;
+      applicantName: string;
+      callReason: "missing_info" | "clarification" | "follow_up";
+      context: {
+        assessmentType: "underwriting" | "fraud";
+        assessmentId: string;
+        triggeredSignals: string[];
+        missingFields?: string[];
+        clarificationNeeded?: string;
+      };
+    }) => {
+      const response = await apiRequest("POST", "/api/voice/call", data);
+      return response.json();
+    },
+    onSuccess: (result) => {
+      setCallingAssessmentId(null);
+      if (result.success) {
+        toast({
+          title: "Call Initiated",
+          description: result.message,
+        });
+      } else {
+        toast({
+          title: "Call Failed",
+          description: result.error || result.message,
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error: Error) => {
+      setCallingAssessmentId(null);
+      toast({
+        title: "Call Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCallApplicant = useCallback((assessmentData: UnderwritingAssessment) => {
+    if (!voiceConfig?.configured) {
+      toast({
+        title: "Voice Call Setup Required",
+        description: "Configure ELEVENLABS_API_KEY, ELEVENLABS_AGENT_ID, and ELEVENLABS_PHONE_NUMBER_ID secrets to enable voice calls.",
+      });
+      return;
+    }
+
+    const phoneNumber = assessmentData.inputData.applicantType === "individual" 
+      ? (assessmentData.inputData as any).phone || "+15551234567"
+      : (assessmentData.inputData as any).contactPhone || "+15551234567";
+
+    const criticalSignals = assessmentData.triggeredSignals
+      .filter(s => s.severity === "critical")
+      .map(s => s.name);
+
+    setCallingAssessmentId(assessmentData.id);
+    voiceCallMutation.mutate({
+      phoneNumber,
+      applicantName: assessmentData.applicantName,
+      callReason: "clarification",
+      context: {
+        assessmentType: "underwriting",
+        assessmentId: assessmentData.id,
+        triggeredSignals: criticalSignals,
+        clarificationNeeded: `Critical signals: ${criticalSignals.join(", ")}`,
+      },
+    });
+  }, [voiceConfig, voiceCallMutation, toast]);
 
   const analyzeMutation = useMutation({
     mutationFn: async (data: UnderwritingApplicationInput) => {
@@ -884,16 +961,16 @@ export default function Underwriting() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  toast({
-                                    title: "Voice Call Setup Required",
-                                    description: "Configure ElevenLabs API key, Agent ID, and Phone Number ID to enable voice calls.",
-                                  });
-                                }}
+                                onClick={() => handleCallApplicant(assessment)}
+                                disabled={callingAssessmentId === assessment.id}
                                 data-testid="button-trigger-call"
                               >
-                                <Phone className="w-4 h-4 mr-2" />
-                                Call Applicant
+                                {callingAssessmentId === assessment.id ? (
+                                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Phone className="w-4 h-4 mr-2" />
+                                )}
+                                {callingAssessmentId === assessment.id ? "Calling..." : "Call Applicant"}
                               </Button>
                             </div>
                           </div>
@@ -1161,14 +1238,16 @@ export default function Underwriting() {
                                       variant="ghost"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        toast({
-                                          title: "Voice Call Setup Required",
-                                          description: "Configure ElevenLabs API key, Agent ID, and Phone Number ID to enable voice calls.",
-                                        });
+                                        handleCallApplicant(result);
                                       }}
+                                      disabled={callingAssessmentId === result.id}
                                       data-testid={`button-call-bulk-${idx}`}
                                     >
-                                      <Phone className="w-4 h-4 text-amber-600" />
+                                      {callingAssessmentId === result.id ? (
+                                        <RefreshCw className="w-4 h-4 animate-spin text-amber-600" />
+                                      ) : (
+                                        <Phone className="w-4 h-4 text-amber-600" />
+                                      )}
                                     </Button>
                                   )}
                                   <Badge variant={getTierBadgeVariant(result.riskTier)}>
@@ -1243,16 +1322,16 @@ export default function Underwriting() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  toast({
-                                    title: "Voice Call Setup Required",
-                                    description: "Configure ElevenLabs API key, Agent ID, and Phone Number ID to enable voice calls.",
-                                  });
-                                }}
+                                onClick={() => handleCallApplicant(selectedBulkAssessment)}
+                                disabled={callingAssessmentId === selectedBulkAssessment.id}
                                 data-testid="button-call-bulk-selected"
                               >
-                                <Phone className="w-4 h-4 mr-2" />
-                                Call Applicant
+                                {callingAssessmentId === selectedBulkAssessment.id ? (
+                                  <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Phone className="w-4 h-4 mr-2" />
+                                )}
+                                {callingAssessmentId === selectedBulkAssessment.id ? "Calling..." : "Call Applicant"}
                               </Button>
                             </div>
                           </div>
