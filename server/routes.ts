@@ -5,7 +5,8 @@ import { extractFieldsFromDocument, bufferToBase64 } from "./gemini";
 import { storage } from "./storage";
 import { evaluateClaim } from "./rules-engine";
 import { sendMissingDocumentsEmail } from "./email";
-import { insertRuleSchema, ruleConditionSchema, extractedFieldSchema, createSubmissionRequestSchema, requiredDocumentTypes } from "@shared/schema";
+import { insertRuleSchema, ruleConditionSchema, extractedFieldSchema, createSubmissionRequestSchema, requiredDocumentTypes, analyzeFraudRequestSchema, sampleClaimData } from "@shared/schema";
+import { analyzeFraud } from "./fraud-engine";
 import { z } from "zod";
 import type { Document, ProcessDocumentResponse, InsertFieldDefinition, RequiredDocumentType } from "@shared/schema";
 
@@ -402,6 +403,31 @@ export async function registerRoutes(
       res.json(updated);
     } catch (error) {
       res.status(500).json({ error: "Failed to send notification" });
+    }
+  });
+
+  // ============================================
+  // FRAUD DETECTION ENDPOINTS
+  // ============================================
+
+  app.post("/api/fraud/analyze", async (req: Request, res: Response) => {
+    try {
+      const parsed = analyzeFraudRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.errors[0]?.message || "Invalid claim data" });
+      }
+      const assessment = analyzeFraud(parsed.data.claimData);
+      res.json(assessment);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to analyze fraud" });
+    }
+  });
+
+  app.get("/api/fraud/sample-data", async (_req: Request, res: Response) => {
+    try {
+      res.json(sampleClaimData);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch sample data" });
     }
   });
 

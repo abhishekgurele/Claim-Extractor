@@ -238,3 +238,142 @@ export const notifyProviderRequestSchema = z.object({
   submissionId: z.string(),
 });
 export type NotifyProviderRequest = z.infer<typeof notifyProviderRequestSchema>;
+
+// ============================================
+// FRAUD DETECTION ENGINE SCHEMAS
+// ============================================
+
+// Risk levels for fraud assessment
+export const riskLevels = ["low", "medium", "high"] as const;
+export type RiskLevel = typeof riskLevels[number];
+
+// Fraud signal severity
+export const signalSeverities = ["info", "warning", "critical"] as const;
+export type SignalSeverity = typeof signalSeverities[number];
+
+// Individual fraud signal detected
+export const fraudSignalSchema = z.object({
+  id: z.string(),
+  code: z.string(),
+  name: z.string(),
+  description: z.string(),
+  severity: z.enum(signalSeverities),
+  confidence: z.number().min(0).max(100),
+  impactedFields: z.array(z.string()),
+  scoreImpact: z.number(),
+  remediationHint: z.string().optional(),
+});
+export type FraudSignal = z.infer<typeof fraudSignalSchema>;
+
+// Claim data input for fraud analysis (standalone module)
+export const claimDataInputSchema = z.object({
+  claimantName: z.string().optional(),
+  policyNumber: z.string().optional(),
+  claimNumber: z.string().optional(),
+  claimDate: z.string().optional(),
+  claimAmount: z.number().optional(),
+  incidentDate: z.string().optional(),
+  incidentDescription: z.string().optional(),
+  incidentLocation: z.string().optional(),
+  treatmentDate: z.string().optional(),
+  providerName: z.string().optional(),
+  providerNPI: z.string().optional(),
+  diagnosisCode: z.string().optional(),
+  claimantAddress: z.string().optional(),
+  claimantPhone: z.string().optional(),
+  claimantEmail: z.string().optional(),
+  vehicleInfo: z.string().optional(),
+  policyHolderName: z.string().optional(),
+  policyLimit: z.number().optional(),
+  previousClaimsCount: z.number().optional(),
+  daysSinceLastClaim: z.number().optional(),
+});
+export type ClaimDataInput = z.infer<typeof claimDataInputSchema>;
+
+// Complete fraud assessment result
+export const fraudAssessmentSchema = z.object({
+  id: z.string(),
+  submissionId: z.string().optional(),
+  overallScore: z.number().min(0).max(100),
+  riskLevel: z.enum(riskLevels),
+  triggeredSignals: z.array(fraudSignalSchema),
+  evaluatedAt: z.string(),
+  inputData: claimDataInputSchema,
+  summary: z.string(),
+  analystNotes: z.string().optional(),
+});
+export type FraudAssessment = z.infer<typeof fraudAssessmentSchema>;
+
+// Request schema for fraud analysis
+export const analyzeFraudRequestSchema = z.object({
+  claimData: claimDataInputSchema,
+});
+export type AnalyzeFraudRequest = z.infer<typeof analyzeFraudRequestSchema>;
+
+// Sample/dummy claim data for testing
+export const sampleClaimData: ClaimDataInput[] = [
+  {
+    claimantName: "John Smith",
+    policyNumber: "POL-2024-00123",
+    claimNumber: "CLM-2024-00456",
+    claimDate: "2024-12-01",
+    claimAmount: 15000,
+    incidentDate: "2024-11-28",
+    incidentDescription: "Vehicle collision at intersection",
+    incidentLocation: "Main St & Oak Ave",
+    treatmentDate: "2024-11-28",
+    providerName: "City General Hospital",
+    providerNPI: "1234567890",
+    diagnosisCode: "S00.0",
+    claimantAddress: "123 Main Street, Springfield",
+    claimantPhone: "555-123-4567",
+    claimantEmail: "john.smith@email.com",
+    vehicleInfo: "2022 Toyota Camry, VIN: 1234567890ABCDEF",
+    policyHolderName: "John Smith",
+    policyLimit: 50000,
+    previousClaimsCount: 1,
+    daysSinceLastClaim: 365,
+  },
+  {
+    claimantName: "Jane Doe",
+    policyNumber: "POL-2024-00789",
+    claimNumber: "CLM-2024-00999",
+    claimDate: "2024-12-05",
+    claimAmount: 75000,
+    incidentDate: "2024-12-04",
+    incidentDescription: "Medical procedure complications",
+    incidentLocation: "Private Clinic",
+    treatmentDate: "2024-12-04",
+    providerName: "Unknown Provider",
+    diagnosisCode: "Z99.9",
+    claimantAddress: "456 Oak Street, Springfield",
+    claimantPhone: "555-987-6543",
+    claimantEmail: "jane.d@email.com",
+    policyHolderName: "Robert Doe",
+    policyLimit: 25000,
+    previousClaimsCount: 5,
+    daysSinceLastClaim: 30,
+  },
+  {
+    claimantName: "Michael Johnson",
+    policyNumber: "POL-2024-00555",
+    claimNumber: "CLM-2024-00777",
+    claimDate: "2024-12-03",
+    claimAmount: 3500,
+    incidentDate: "2024-12-01",
+    incidentDescription: "Minor fender bender in parking lot",
+    incidentLocation: "Walmart Parking Lot",
+    treatmentDate: "2024-12-02",
+    providerName: "QuickCare Clinic",
+    providerNPI: "9876543210",
+    diagnosisCode: "S13.4",
+    claimantAddress: "789 Pine Ave, Springfield",
+    claimantPhone: "555-456-7890",
+    claimantEmail: "m.johnson@email.com",
+    vehicleInfo: "2020 Honda Civic, VIN: ABCDEF1234567890",
+    policyHolderName: "Michael Johnson",
+    policyLimit: 30000,
+    previousClaimsCount: 0,
+    daysSinceLastClaim: 0,
+  },
+];
