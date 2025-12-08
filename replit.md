@@ -162,3 +162,38 @@ Preferred communication style: Simple, everyday language.
 - `shared/schema.ts` - Underwriting types and Zod schemas
 - `server/underwriting-engine.ts` - Risk rules and analysis logic
 - `client/src/pages/underwriting.tsx` - UI page
+
+### Voice Calling Integration
+
+**Purpose:** Automated outbound voice calls to applicants when clarification or missing information is needed
+
+**Provider:** ElevenLabs Conversational AI with Twilio integration
+
+**Service File:** `server/voice-calling.ts`
+
+**Features:**
+- Initiate outbound calls via ElevenLabs API
+- Dynamic agent prompts based on call reason (missing info, clarification, follow-up)
+- Call logging with status tracking
+- Automatic call recommendation based on assessment results
+
+**Call Reasons:**
+- `missing_info` - Key fields missing from application
+- `clarification` - Critical signals triggered requiring verification
+- `follow_up` - General follow-up on application status
+
+**API Endpoints:**
+- `POST /api/voice/call` - Initiate a voice call to applicant
+- `GET /api/voice/logs` - Get all call logs
+- `GET /api/voice/logs/:id` - Get specific call log by ID
+- `GET /api/voice/config` - Check if ElevenLabs is configured
+- `POST /api/voice/check-needed` - Determine if call is needed for an assessment
+
+**Environment Variables Required:**
+- `ELEVENLABS_API_KEY` - ElevenLabs API key
+- `ELEVENLABS_AGENT_ID` - Voice agent ID from ElevenLabs dashboard
+- `ELEVENLABS_PHONE_NUMBER_ID` - Phone number ID from ElevenLabs/Twilio
+
+**UI Integration:**
+- "Call Applicant" button appears on underwriting page when critical signals are triggered
+- Warning banner recommends calls when clarification is needed

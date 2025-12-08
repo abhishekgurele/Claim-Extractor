@@ -17,6 +17,7 @@ export interface VoiceCallRequest {
 export interface VoiceCallResponse {
   success: boolean;
   callId?: string;
+  logId?: string;
   conversationId?: string;
   message: string;
   error?: string;
@@ -167,6 +168,7 @@ export async function initiateVoiceCall(request: VoiceCallRequest): Promise<Voic
     return {
       success: true,
       callId: callLog.callId,
+      logId: callLogId,
       conversationId: result.conversation_id,
       message: `Call initiated to ${request.phoneNumber}`,
     };
